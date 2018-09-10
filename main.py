@@ -2,19 +2,28 @@ from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 import pandas as pd
-import pandas_profiling
 from datetime import datetime
-from sklearn.metrics import mean_squared_error, make_scorer
 
 TRAIN_DATA_PATH = 'data/train.csv'
 TEST_DATA_PATH = 'data/test.csv'
+DROP_LIST = ['Id', 'LotFrontage', 'MasVnrArea', 'GarageYrBlt']
+CV = 10
+
+
+def scaling(df):
+    df = df.drop(DROP_LIST, axis=1)
+    df.fillna(df.mean(), inplace=True)
+    df['TotalSF'] = df['TotalBsmtSF'] + df['1stFlrSF'] + df['2ndFlrSF']
+    df = MinMaxScaler().fit_transform(df)
+    return df
 
 
 def main():
     df_train = pd.read_csv(TRAIN_DATA_PATH)
     df_test = pd.read_csv(TEST_DATA_PATH)
-    # pandas_profiling.ProfileReport(df_train)
-    # pandas_profiling.ProfileReport(df_test)
+
+    print(df_train.info())
+    print(df_test.info())
 
     for i in range(df_train.shape[1]):
         if df_train.iloc[:, i].dtypes == object:
@@ -23,20 +32,17 @@ def main():
             df_train.iloc[:, i] = lbl.transform(list(df_train.iloc[:, i].values))
             df_test.iloc[:, i] = lbl.transform(list(df_test.iloc[:, i].values))
 
-    x_train = df_train.drop(['Id', 'SalePrice'], axis=1).fillna(df_train.mean())
+    x_train = scaling(df_train.drop('SalePrice', axis=1))
+    x_test = scaling(df_test)
     y_train = df_train['SalePrice']
-    x_test = df_test.drop('Id', axis=1).fillna(df_test.mean())
 
-    # Xmat = pd.concat([x_train, x_test])
-    # sns.distplot(y_train)
-    # plot.show()
+    parameters = {"n_estimators": [3, 10, 100, 1000],
+                  "bootstrap": [True, False],
+                  "n_jobs": [-1]}
 
-    x_train = MinMaxScaler().fit_transform(x_train)
-    x_test = MinMaxScaler().fit_transform(x_test)
-
-    parameters = {'n_estimators': [10, 100], 'n_jobs': [-1]}
     rf = RandomForestRegressor()
-    cv = GridSearchCV(rf, parameters, n_jobs=-1, return_train_score=False, cv=5, scoring='mean_squared_error', verbose=10)
+    cv = GridSearchCV(rf, parameters, n_jobs=-1, return_train_score=False,
+                      cv=CV, scoring='neg_mean_squared_error', verbose=3)
     cv.fit(x_train, y_train)
 
     print('Best Score:', cv.best_score_)
