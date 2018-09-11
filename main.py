@@ -2,6 +2,7 @@ from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
 TRAIN_DATA_PATH = 'data/train.csv'
@@ -10,20 +11,27 @@ DROP_LIST = ['Id', 'LotFrontage', 'MasVnrArea', 'GarageYrBlt']
 CV = 10
 
 
-def scaling(df):
+def scaling(df, mean):
     df = df.drop(DROP_LIST, axis=1)
-    df.fillna(df.mean(), inplace=True)
+    df.fillna(mean, inplace=True)
     df['TotalSF'] = df['TotalBsmtSF'] + df['1stFlrSF'] + df['2ndFlrSF']
-    df = MinMaxScaler().fit_transform(df)
+    # df = MinMaxScaler().fit_transform(df)
     return df
+
+
+def random_feature(X, y):
+    rf = RandomForestRegressor(n_estimators=80, max_features='auto')
+    rf.fit(X, y)
+    ranking = np.argsort(rf.feature_importances_)
+    return ranking
 
 
 def main():
     df_train = pd.read_csv(TRAIN_DATA_PATH)
     df_test = pd.read_csv(TEST_DATA_PATH)
 
-    print(df_train.info())
-    print(df_test.info())
+    # print(df_train.info())
+    # print(df_test.info())
 
     for i in range(df_train.shape[1]):
         if df_train.iloc[:, i].dtypes == object:
@@ -32,12 +40,14 @@ def main():
             df_train.iloc[:, i] = lbl.transform(list(df_train.iloc[:, i].values))
             df_test.iloc[:, i] = lbl.transform(list(df_test.iloc[:, i].values))
 
-    x_train = scaling(df_train.drop('SalePrice', axis=1))
-    x_test = scaling(df_test)
+    x_train = df_train.drop('SalePrice', axis=1)
+    x_test = df_test
+    xMat = pd.concat([x_train, x_test])
+    x_train = scaling(x_train, xMat.mean())
+    x_test = scaling(x_test, xMat.mean())
     y_train = df_train['SalePrice']
 
-    parameters = {"n_estimators": [3, 10, 100, 1000],
-                  "bootstrap": [True, False],
+    parameters = {"n_estimators": [1000],
                   "n_jobs": [-1]}
 
     rf = RandomForestRegressor()
